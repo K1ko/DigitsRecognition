@@ -1,5 +1,4 @@
 import os
-
 import streamlit as st
 import tensorflow as tf
 import cv2
@@ -15,39 +14,31 @@ mnist_data = tf.keras.datasets.mnist
 x_train = tf.keras.utils.normalize(x_train, axis=1)
 x_test = tf.keras.utils.normalize(x_test, axis=1)
 
-# Create model
-digit_model = tf.keras.models.Sequential()  # create model
-digit_model.add(
-    tf.keras.layers.Flatten(input_shape=(28, 28)))  # flatten input layer to 1D array of 784 features (28x28)
-digit_model.add(tf.keras.layers.Dense(128, activation='relu'))  # add hidden layer with 128 neurons
-digit_model.add(tf.keras.layers.Dense(128, activation='relu'))  # add hidden layer with 128 neurons
-digit_model.add(tf.keras.layers.Dense(10, activation='softmax'))
 
-# Compile model
-digit_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+# Function to create and train the model
+def create_and_train_model():
+    digit_model = tf.keras.models.Sequential()
+    digit_model.add(tf.keras.layers.Flatten(input_shape=(28, 28)))
+    digit_model.add(tf.keras.layers.Dense(128, activation='relu'))
+    digit_model.add(tf.keras.layers.Dense(128, activation='relu'))
+    digit_model.add(tf.keras.layers.Dense(10, activation='softmax'))
+    digit_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    digit_model.fit(x_train, y_train, epochs=6)
+    digit_model.save('digits_recognition_model.h5')
 
-# Train model
-digit_model.fit(x_train, y_train, epochs=6)
 
-# Evaluate model
-loss, accuracy = digit_model.evaluate(x_test, y_test)
-
-digit_model.save('digits_recognition_model.h5')  # save model
+# Load the pre-trained model once
+if 'model' not in st.session_state:
+    if not os.path.exists('digits_recognition_model.h5'):
+        create_and_train_model()
+    st.session_state.model = tf.keras.models.load_model('digits_recognition_model.h5')
 
 
 def classify_digits(model, image):
     img = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
-
-    # Resize the image to 28x28 pixels
     img = cv2.resize(img, (28, 28))
-
-    # Normalize pixel values to be between 0 and 1
     img = img / 255.0
-
-    # Expand dimensions to match the model's input format
     img = np.expand_dims(img, axis=0)
-
-    # Predict the class
     prediction = model.predict(img)
     return prediction
 
@@ -74,8 +65,7 @@ if uploaded_image is not None:
     submit = st.button('Classify')
 
     if submit:
-        model = tf.keras.models.load_model('digits_recognition_model.h5')
-        prediction = classify_digits(model, img_temp)
+        prediction = classify_digits(st.session_state.model, img_temp)
         st.subheader(f'Prediction result: {np.argmax(prediction)}')
 
     os.remove(img_temp)
