@@ -14,6 +14,9 @@ st.set_page_config(page_title='Digits Recognition', page_icon='🔢')
 mnist_data = tf.keras.datasets.mnist
 (x_train, y_train), (x_test, y_test) = mnist_data.load_data()
 
+print("Train data shape:", x_train.shape, y_train.shape)
+print("Test data shape:", x_test.shape, y_test.shape)
+
 # Normalize data
 x_train = x_train.astype(np.float32) / 255.0  # Ensure it's float32 for compatibility with albumentations
 x_test = x_test.astype(np.float32) / 255.0
@@ -22,8 +25,7 @@ transform = A.Compose([
     A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.5),
     A.Rotate(limit=15, p=0.2),
     A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=15, p=0.5),
-    A.Blur(blur_limit=3, p=0.2),  # Set blur_limit to an odd integer for better results
-    A.GaussNoise(var_limit=(10.0, 50.0), p=0.2),
+    A.Blur(blur_limit=3, p=0.2),
     A.GaussianBlur(blur_limit=(3, 7), p=0.2),
 ])
 
@@ -33,19 +35,32 @@ for image in x_train:
     transformed = transform(image=image)
     augmented_images.append(transformed['image'])
 
-x_train = np.array(augmented_images)
+augmented_images = np.array(augmented_images)
+
+
+# Function to visualize original and augmented images
+def visualize_augmentations(original_images, augmented_images, num_images=5):
+    fig, axes = plt.subplots(num_images, 2, figsize=(10, 10))
+    for i in range(num_images):
+        axes[i, 0].imshow(original_images[i], cmap='gray')
+        axes[i, 0].set_title('Original')
+        axes[i, 0].axis('off')
+
+        axes[i, 1].imshow(augmented_images[i], cmap='gray')
+        axes[i, 1].set_title('Augmented')
+        axes[i, 1].axis('off')
+    st.pyplot(fig)
+
+
+# Visualize some original and augmented images
+visualize_augmentations(x_train, augmented_images)
 
 
 # Function to create and train the model
 def create_and_train_model():
     digit_model = tf.keras.models.Sequential([
-        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.MaxPooling2D(2, 2),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.MaxPooling2D(2, 2),
-        tf.keras.layers.Flatten(),
+        tf.keras.layers.Flatten(input_shape=(28, 28)),
+        tf.keras.layers.Dense(128, activation='relu'),
         tf.keras.layers.Dense(128, activation='relu'),
         tf.keras.layers.Dense(10, activation='softmax')
     ])
@@ -55,8 +70,9 @@ def create_and_train_model():
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 
     digit_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-    digit_model.fit(x_train, y_train, validation_split=0.1, epochs=15, callbacks=[lr_scheduler, early_stopping])
+    digit_model.fit(augmented_images, y_train, validation_split=0.1, epochs=5, callbacks=[lr_scheduler, early_stopping])
     digit_model.save('digits_recognition_model.h5')
+    print(f"Original shape: {x_train.shape}, Augmented shape: {np.array(augmented_images).shape}")
 
 
 # Load the pre-trained model once
@@ -82,22 +98,13 @@ def resize_image(image, target_size):
     return resized_img
 
 
-def plot_sample_prediction(images, labels, predictions):
-    n = len(images)
-    cols = 3
-    rows = n // cols + int(n % cols != 0)
-    fig, axes = plt.subplots(rows, cols, figsize=(8, 8))
-    axes = axes.flatten()
-
-    for i, (img, lbl, pred) in enumerate(zip(images, labels, predictions)):
-        ax = axes[i]
-        ax.imshow(img.squeeze(), cmap='gray')
-        ax.set_title(f"True: {lbl}, Pred: {np.argmax(pred)}")
-        ax.axis('off')
-
-    for j in range(i + 1, len(axes)):
-        fig.delaxes(axes[j])
-
+def plot_prediction_probabilities(prediction):
+    fig, ax = plt.subplots()
+    ax.bar(range(10), prediction[0])
+    ax.set_xticks(range(10))
+    ax.set_xlabel('Digit')
+    ax.set_ylabel('Probability')
+    ax.set_title('Prediction Probabilities')
     st.pyplot(fig)
 
 
@@ -118,6 +125,6 @@ if uploaded_image is not None:
     if submit:
         prediction = classify_digits(st.session_state.model, img_temp)
         st.subheader(f'Prediction result: {np.argmax(prediction)}')
-        plot_sample_prediction([image_np], ["N/A"], [prediction])
+        plot_prediction_probabilities(prediction)
 
     os.remove(img_temp)
