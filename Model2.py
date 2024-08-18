@@ -94,6 +94,7 @@ def create_model():
 def load_image(image):
     img = load_img(image, color_mode='grayscale', target_size=(28, 28))
     img = img_to_array(img)
+    img = 255 - img #VERY important
     img = img.reshape(1, 28, 28, 1)
     img = img.astype('float32')
     img = img / 255.0
@@ -110,4 +111,4 @@ def classify(image):
 
 
 #create_model()
-classify('3-Figure3-1.png')
+classify('Input Images/3-Figure3-1.png')
